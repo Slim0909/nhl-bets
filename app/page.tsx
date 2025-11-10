@@ -1,143 +1,81 @@
 'use client';
-
 import { useEffect, useState } from 'react';
 
-// Types min pour parser TheOddsAPI
-type Outcome = { name: string; price: number; point?: number };
-type Market = { key: string; outcomes: Outcome[] };
-type Bookmaker = { title: string; markets: Market[] };
-type OddsGame = {
+type PriceBook = { price: number; book: string };
+type TotSide = { price: number; point: number | null; book: string };
+type GameRow = {
   id: string;
   commence_time: string;
   home_team: string;
   away_team: string;
-  bookmakers: Bookmaker[];
+  h2h: { bestHome: PriceBook; bestAway: PriceBook; avgHome: number|null; avgAway: number|null; impliedHome: number|null; impliedAway: number|null; };
+  totals: { line: number|null; bestOver: TotSide; bestUnder: TotSide; };
 };
+type ApiResp = { ok:true; hours:number; count:number; games:GameRow[] } | { ok:false; status?:number; error?:string };
 
-type ApiResp =
-  | { ok: true; games: OddsGame[] }
-  | { ok: false; status?: number; error?: string };
+const fmtPct = (n:number|null|undefined)=> n==null? '—' : `${n.toFixed(1)}%`;
+const fmtOdds = (n:number|null|undefined)=> n==null? '—' : n.toFixed(2);
 
-// Trouve la meilleure cote moneyline pour domicile / extérieur
-function bestH2HPrices(game: OddsGame) {
-  let bestHome = { price: -Infinity, book: '' };
-  let bestAway = { price: -Infinity, book: '' };
+export default function Page(){
+  const [data,setData]=useState<ApiResp|null>(null);
+  const [err,setErr]=useState<string|null>(null);
 
-  for (const b of game.bookmakers || []) {
-    const m = (b.markets || []).find((mm) => mm.key === 'h2h');
-    if (!m) continue;
-    for (const o of m.outcomes || []) {
-      if (o.name === game.home_team && o.price > bestHome.price) {
-        bestHome = { price: o.price, book: b.title };
-      }
-      if (o.name === game.away_team && o.price > bestAway.price) {
-        bestAway = { price: o.price, book: b.title };
-      }
-    }
-  }
-  return { bestHome, bestAway };
-}
-
-export default function Page() {
-  const [data, setData] = useState<ApiResp | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch('/api/odds/today', { cache: 'no-store' });
-        const json = (await res.json()) as ApiResp;
-        setData(json);
-      } catch (e: any) {
-        setErr(String(e?.message ?? e));
-      }
-    })();
-  }, []);
-
-  if (err) {
-    return (
-      <main className="p-8">
-        <h1 className="text-4xl font-bold mb-6">NHL Bets — Live Odds (TheOddsAPI)</h1>
-        <p className="text-red-400">Erreur réseau: {err}</p>
-      </main>
-    );
-  }
-
-  if (!data) {
-    return (
-      <main className="p-8">
-        <h1 className="text-4xl font-bold mb-6">NHL Bets — Live Odds (TheOddsAPI)</h1>
-        <p className="opacity-70">Chargement…</p>
-      </main>
-    );
-  }
-
-  if (!data.ok) {
-    return (
-      <main className="p-8">
-        <h1 className="text-4xl font-bold mb-6">NHL Bets — Live Odds (TheOddsAPI)</h1>
-        <p className="text-red-400">
-          API en erreur — status: {data.status ?? '?'} | {data.error ?? 'unknown error'}
-        </p>
-      </main>
-    );
-  }
-
-  const games = data.games || [];
-  if (games.length === 0) {
-    return (
-      <main className="p-8">
-        <h1 className="text-4xl font-bold mb-6">NHL Bets — Live Odds (TheOddsAPI)</h1>
-        <p className="opacity-70 mb-4">
-          Source: /api/odds/today — meilleures cotes moneyline par équipe.
-        </p>
-        <div className="border border-neutral-700 rounded-xl p-6">
-          Aucune rencontre disponible (ou l’API ne répond pas).
-        </div>
-      </main>
-    );
-  }
+  useEffect(()=>{ (async()=>{
+    try{ const r=await fetch('/api/odds/window?hours=24',{cache:'no-store'}); setData(await r.json()); }
+    catch(e:any){ setErr(String(e?.message??e)); }
+  })(); },[]);
 
   return (
-    <main className="p-8">
-      <h1 className="text-4xl font-bold mb-4">NHL Bets — Live Odds (TheOddsAPI)</h1>
-      <p className="opacity-70 mb-6">
-        Source: /api/odds/today — meilleures cotes moneyline par équipe.
-      </p>
+    <main className="p-6 md:p-8">
+      <h1 className="text-4xl font-bold mb-2">NHL Bets — Live Odds (TheOddsAPI)</h1>
+      <p className="opacity-70 mb-6">Fenêtre : prochaines 24h — source <code>/api/odds/window?hours=24</code>.</p>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {games.map((g) => {
-          const { bestHome, bestAway } = bestH2HPrices(g);
-          const dt = new Date(g.commence_time);
-          const when = isNaN(dt.getTime()) ? g.commence_time : dt.toLocaleString();
+      {err && <div className="text-red-400 mb-4">Erreur : {err}</div>}
+      {!data && !err && <div className="opacity-70">Chargement…</div>}
+      {data && !('ok' in data && data.ok) && (
+        <div className="text-red-400 mb-4">API en erreur — status {('status'in data)&&data.status} {('error'in data)&&data.error}</div>
+      )}
 
-          return (
-            <div key={g.id} className="border border-neutral-700 rounded-xl p-5">
-              <div className="text-sm opacity-70 mb-1">{when}</div>
-              <div className="text-xl font-semibold mb-3">
-                {g.away_team} @ {g.home_team}
-              </div>
-              <div className="text-sm">
-                <div className="mb-1">
-                  <span className="opacity-70">Home: </span>
-                  <span className="font-medium">
-                    {bestHome.price > 0 ? bestHome.price.toFixed(2) : '—'}
-                  </span>
-                  {bestHome.book && <span className="opacity-70"> — {bestHome.book}</span>}
-                </div>
-                <div>
-                  <span className="opacity-70">Away: </span>
-                  <span className="font-medium">
-                    {bestAway.price > 0 ? bestAway.price.toFixed(2) : '—'}
-                  </span>
-                  {bestAway.book && <span className="opacity-70"> — {bestAway.book}</span>}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      {data && 'ok' in data && data.ok && (
+        <>
+          <div className="mb-3 opacity-70">{data.count} rencontres trouvées.</div>
+          <div className="overflow-x-auto border border-neutral-700 rounded-xl">
+            <table className="min-w-[900px] w-full text-sm">
+              <thead className="bg-neutral-900/40">
+                <tr className="text-left">
+                  <th className="p-3">Date</th><th className="p-3">Match</th>
+                  <th className="p-3">Home (best)</th><th className="p-3">Away (best)</th>
+                  <th className="p-3">Proba Home</th><th className="p-3">Proba Away</th>
+                  <th className="p-3">Moy. Home</th><th className="p-3">Moy. Away</th>
+                  <th className="p-3">Totals</th><th className="p-3">Over (best)</th><th className="p-3">Under (best)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.games.map((g)=>{
+                  const dt=new Date(g.commence_time);
+                  const when=isNaN(dt.getTime())?g.commence_time:dt.toLocaleString();
+                  return (
+                    <tr key={g.id} className="border-t border-neutral-800">
+                      <td className="p-3 whitespace-nowrap">{when}</td>
+                      <td className="p-3 font-medium">{g.away_team} @ {g.home_team}</td>
+                      <td className="p-3">{fmtOdds(g.h2h.bestHome.price)} <span className="opacity-70">— {g.h2h.bestHome.book}</span></td>
+                      <td className="p-3">{fmtOdds(g.h2h.bestAway.price)} <span className="opacity-70">— {g.h2h.bestAway.book}</span></td>
+                      <td className="p-3">{fmtPct(g.h2h.impliedHome)}</td>
+                      <td className="p-3">{fmtPct(g.h2h.impliedAway)}</td>
+                      <td className="p-3">{g.h2h.avgHome?fmtOdds(g.h2h.avgHome):'—'}</td>
+                      <td className="p-3">{g.h2h.avgAway?fmtOdds(g.h2h.avgAway):'—'}</td>
+                      <td className="p-3">{g.totals.line ?? '—'}</td>
+                      <td className="p-3">{fmtOdds(g.totals.bestOver.price)} <span className="opacity-70">— {g.totals.bestOver.point ?? g.totals.line ?? ''} ({g.totals.bestOver.book})</span></td>
+                      <td className="p-3">{fmtOdds(g.totals.bestUnder.price)} <span className="opacity-70">— {g.totals.bestUnder.point ?? g.totals.line ?? ''} ({g.totals.bestUnder.book})</span></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-4 text-xs opacity-60">* Probas = 100 / cote décimale (non normalisées). « Moy. » = moyenne simple des cotes par bookmaker.</p>
+        </>
+      )}
     </main>
   );
 }
-
