@@ -1,26 +1,31 @@
-@import "tailwindcss";
-
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #ffffff;
+  --text: #111827;          /* gris très sombre */
+  --muted: #6b7280;         /* gris */
+  --border: #e5e7eb;        /* gris clair */
+  --accent: #0ea5e9;        /* bleu lisible */
+  --soft: #f9fafb;          /* fond de sections */
 }
+* { box-sizing: border-box; }
+html, body { margin:0; padding:0; background:var(--bg); color:var(--text); font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+.container { max-width:1200px; margin:0 auto; padding:24px; }
+h1 { font-size: 28px; margin: 0 0 18px; }
+h2 { font-size: 20px; margin: 24px 0 8px; }
+h3 { font-size: 16px; margin: 18px 0 6px; color: var(--muted); font-weight:600; }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+.card { background: var(--soft); border:1px solid var(--border); border-radius: 10px; padding: 16px; }
+.btn { display:inline-block; padding:8px 12px; border-radius:8px; background:#111827; color:#fff; border:1px solid #111827; cursor:pointer; font-size:13px; }
+.btn.secondary { background:#fff; color:#111827; border:1px solid var(--border); }
+.btn:disabled { opacity:.5; cursor:not-allowed; }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
+.table { width:100%; border-collapse: collapse; }
+.table th, .table td { padding:10px 8px; border-bottom:1px solid var(--border); text-align:left; }
+.table thead th { background:#f3f4f6; font-weight:600; }
+.badge { display:inline-block; padding:2px 8px; border-radius:999px; background:#eef6ff; color:#1d4ed8; border:1px solid #dbeafe; font-size:12px; }
+.small { color:var(--muted); font-size:12px; }
+.grid { display:grid; gap:16px; }
+.grid-2 { grid-template-columns: 1fr 1fr; }
+@media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
