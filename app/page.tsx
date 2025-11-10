@@ -2,7 +2,9 @@
 export const dynamic = "force-dynamic";
 export const revalidate = 30;
 
-// ---------- Types (minimaux) ----------
+import type { CSSProperties } from "react";
+
+// ---------- Types ----------
 type Outcome = { name: string; price: number; point?: number };
 type Market = { key: string; outcomes: Outcome[] };
 type Bookmaker = { title: string; markets: Market[] };
@@ -50,20 +52,12 @@ function fmtTime(iso: string) {
 }
 
 async function getOdds(): Promise<OddsGame[]> {
-  const base =
-    process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : "http://localhost:3000";
+  const base = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "http://localhost:3000";
 
-  const res = await fetch(`${base}/api/odds/today`, {
-    cache: "no-store",
-  });
-
-  // Si l'API renvoie une erreur, on retourne un tableau vide
-  if (!res.ok) {
-    return [];
-  }
-
+  const res = await fetch(`${base}/api/odds/today`, { cache: "no-store" });
+  if (!res.ok) return [];
   const json = await res.json();
   return (json?.games ?? []) as OddsGame[];
 }
@@ -78,29 +72,15 @@ export default async function Page() {
         NHL Bets — Live Odds (TheOddsAPI)
       </h1>
       <p style={{ opacity: 0.75, marginBottom: 20 }}>
-        Source: /api/odds/today — meilleures cotes moneyline par équipe
-        (tous bookmakers confondus).
+        Source: /api/odds/today — meilleures cotes moneyline par équipe.
       </p>
 
       {games.length === 0 ? (
-        <div
-          style={{
-            padding: 24,
-            border: "1px solid #333",
-            borderRadius: 10,
-            background: "rgba(255,255,255,0.03)",
-          }}
-        >
-          Aucune rencontre disponible pour le moment (ou l’API ne répond pas).
+        <div style={emptyBox}>
+          Aucune rencontre disponible (ou l’API ne répond pas).
         </div>
       ) : (
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            borderSpacing: 0,
-          }}
-        >
+        <table style={table}>
           <thead>
             <tr>
               <th style={th}>Date</th>
@@ -138,16 +118,27 @@ export default async function Page() {
   );
 }
 
-// ---------- styles inline ----------
-const th: React.CSSProperties = {
+// ---------- styles ----------
+const th: CSSProperties = {
   textAlign: "left",
   padding: "12px 10px",
   borderBottom: "1px solid #333",
   fontWeight: 600,
   fontSize: 14,
 };
-const td: React.CSSProperties = {
+const td: CSSProperties = {
   padding: "12px 10px",
   borderBottom: "1px solid #222",
   fontSize: 14,
+};
+const table: CSSProperties = {
+  width: "100%",
+  borderCollapse: "collapse",
+  borderSpacing: 0,
+};
+const emptyBox: CSSProperties = {
+  padding: 24,
+  border: "1px solid #333",
+  borderRadius: 10,
+  background: "rgba(255,255,255,0.03)",
 };
