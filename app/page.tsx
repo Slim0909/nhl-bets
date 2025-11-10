@@ -1,10 +1,8 @@
-// app/page.tsx
-export const dynamic = "force-dynamic";
-export const revalidate = 30;
+'use client';
 
-import type { CSSProperties } from "react";
+import { useEffect, useState } from 'react';
 
-// ---------- Types ----------
+// Types min pour parser TheOddsAPI
 type Outcome = { name: string; price: number; point?: number };
 type Market = { key: string; outcomes: Outcome[] };
 type Bookmaker = { title: string; markets: Market[] };
@@ -16,13 +14,17 @@ type OddsGame = {
   bookmakers: Bookmaker[];
 };
 
-// ---------- Utils ----------
+type ApiResp =
+  | { ok: true; games: OddsGame[] }
+  | { ok: false; status?: number; error?: string };
+
+// Trouve la meilleure cote moneyline pour domicile / extérieur
 function bestH2HPrices(game: OddsGame) {
-  let bestHome = { price: -Infinity as number, book: "" };
-  let bestAway = { price: -Infinity as number, book: "" };
+  let bestHome = { price: -Infinity, book: '' };
+  let bestAway = { price: -Infinity, book: '' };
 
   for (const b of game.bookmakers || []) {
-    const m = (b.markets || []).find((mm) => mm.key === "h2h");
+    const m = (b.markets || []).find((mm) => mm.key === 'h2h');
     if (!m) continue;
     for (const o of m.outcomes || []) {
       if (o.name === game.home_team && o.price > bestHome.price) {
@@ -36,109 +38,106 @@ function bestH2HPrices(game: OddsGame) {
   return { bestHome, bestAway };
 }
 
-function fmtTime(iso: string) {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString(undefined, {
-      weekday: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      month: "short",
-      day: "2-digit",
-    });
-  } catch {
-    return iso;
+export default function Page() {
+  const [data, setData] = useState<ApiResp | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/odds/today', { cache: 'no-store' });
+        const json = (await res.json()) as ApiResp;
+        setData(json);
+      } catch (e: any) {
+        setErr(String(e?.message ?? e));
+      }
+    })();
+  }, []);
+
+  if (err) {
+    return (
+      <main className="p-8">
+        <h1 className="text-4xl font-bold mb-6">NHL Bets — Live Odds (TheOddsAPI)</h1>
+        <p className="text-red-400">Erreur réseau: {err}</p>
+      </main>
+    );
   }
-}
 
-async function getOdds(): Promise<OddsGame[]> {
-  const base = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : "http://localhost:3000";
+  if (!data) {
+    return (
+      <main className="p-8">
+        <h1 className="text-4xl font-bold mb-6">NHL Bets — Live Odds (TheOddsAPI)</h1>
+        <p className="opacity-70">Chargement…</p>
+      </main>
+    );
+  }
 
-  const res = await fetch(`${base}/api/odds/today`, { cache: "no-store" });
-  if (!res.ok) return [];
-  const json = await res.json();
-  return (json?.games ?? []) as OddsGame[];
-}
+  if (!data.ok) {
+    return (
+      <main className="p-8">
+        <h1 className="text-4xl font-bold mb-6">NHL Bets — Live Odds (TheOddsAPI)</h1>
+        <p className="text-red-400">
+          API en erreur — status: {data.status ?? '?'} | {data.error ?? 'unknown error'}
+        </p>
+      </main>
+    );
+  }
 
-// ---------- Page ----------
-export default async function Page() {
-  const games = await getOdds();
+  const games = data.games || [];
+  if (games.length === 0) {
+    return (
+      <main className="p-8">
+        <h1 className="text-4xl font-bold mb-6">NHL Bets — Live Odds (TheOddsAPI)</h1>
+        <p className="opacity-70 mb-4">
+          Source: /api/odds/today — meilleures cotes moneyline par équipe.
+        </p>
+        <div className="border border-neutral-700 rounded-xl p-6">
+          Aucune rencontre disponible (ou l’API ne répond pas).
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <main style={{ padding: "24px", maxWidth: 1100, margin: "0 auto" }}>
-      <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>
-        NHL Bets — Live Odds (TheOddsAPI)
-      </h1>
-      <p style={{ opacity: 0.75, marginBottom: 20 }}>
+    <main className="p-8">
+      <h1 className="text-4xl font-bold mb-4">NHL Bets — Live Odds (TheOddsAPI)</h1>
+      <p className="opacity-70 mb-6">
         Source: /api/odds/today — meilleures cotes moneyline par équipe.
       </p>
 
-      {games.length === 0 ? (
-        <div style={emptyBox}>
-          Aucune rencontre disponible (ou l’API ne répond pas).
-        </div>
-      ) : (
-        <table style={table}>
-          <thead>
-            <tr>
-              <th style={th}>Date</th>
-              <th style={th}>Match</th>
-              <th style={th}>Home — Best ML</th>
-              <th style={th}>Away — Best ML</th>
-            </tr>
-          </thead>
-          <tbody>
-            {games.map((g) => {
-              const { bestHome, bestAway } = bestH2HPrices(g);
-              return (
-                <tr key={g.id}>
-                  <td style={td}>{fmtTime(g.commence_time)}</td>
-                  <td style={td}>
-                    <strong>{g.home_team}</strong> vs {g.away_team}
-                  </td>
-                  <td style={td}>
-                    {isFinite(bestHome.price)
-                      ? `${bestHome.price} (${bestHome.book})`
-                      : "—"}
-                  </td>
-                  <td style={td}>
-                    {isFinite(bestAway.price)
-                      ? `${bestAway.price} (${bestAway.book})`
-                      : "—"}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
+      <div className="grid gap-4 md:grid-cols-2">
+        {games.map((g) => {
+          const { bestHome, bestAway } = bestH2HPrices(g);
+          const dt = new Date(g.commence_time);
+          const when = isNaN(dt.getTime()) ? g.commence_time : dt.toLocaleString();
+
+          return (
+            <div key={g.id} className="border border-neutral-700 rounded-xl p-5">
+              <div className="text-sm opacity-70 mb-1">{when}</div>
+              <div className="text-xl font-semibold mb-3">
+                {g.away_team} @ {g.home_team}
+              </div>
+              <div className="text-sm">
+                <div className="mb-1">
+                  <span className="opacity-70">Home: </span>
+                  <span className="font-medium">
+                    {bestHome.price > 0 ? bestHome.price.toFixed(2) : '—'}
+                  </span>
+                  {bestHome.book && <span className="opacity-70"> — {bestHome.book}</span>}
+                </div>
+                <div>
+                  <span className="opacity-70">Away: </span>
+                  <span className="font-medium">
+                    {bestAway.price > 0 ? bestAway.price.toFixed(2) : '—'}
+                  </span>
+                  {bestAway.book && <span className="opacity-70"> — {bestAway.book}</span>}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </main>
   );
 }
 
-// ---------- styles ----------
-const th: CSSProperties = {
-  textAlign: "left",
-  padding: "12px 10px",
-  borderBottom: "1px solid #333",
-  fontWeight: 600,
-  fontSize: 14,
-};
-const td: CSSProperties = {
-  padding: "12px 10px",
-  borderBottom: "1px solid #222",
-  fontSize: 14,
-};
-const table: CSSProperties = {
-  width: "100%",
-  borderCollapse: "collapse",
-  borderSpacing: 0,
-};
-const emptyBox: CSSProperties = {
-  padding: 24,
-  border: "1px solid #333",
-  borderRadius: 10,
-  background: "rgba(255,255,255,0.03)",
-};
